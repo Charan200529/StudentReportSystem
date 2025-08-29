@@ -1,0 +1,27 @@
+{
+  "rules": {
+    "users": {
+      ".read": "auth != null && auth.token.email === 'admin@gmail.com'",
+      "$uid": {
+        ".read": "$uid === auth.uid || auth.token.email === 'admin@gmail.com'",
+        ".write": "$uid === auth.uid || auth.token.email === 'admin@gmail.com'"
+      }
+    },
+    "courses": {
+      ".read": "auth != null",
+      ".write": "auth != null && (auth.token.email === 'admin@gmail.com')"
+    },
+    "assignments": {
+      ".read": "auth != null && (auth.token.email === 'admin@gmail.com' || (data.child('courseId').exists() && root.child('enrollments').child(auth.uid).child(data.child('courseId').val()).exists() && root.child('enrollments').child(auth.uid).child(data.child('courseId').val()).child('status').val() === 'ACTIVE'))",
+      ".write": "auth != null && (auth.token.email === 'admin@gmail.com' || (data.child('courseId').exists() && root.child('courses').child(data.child('courseId').val()).child('teacherUid').val() === auth.uid))"
+    },
+    "enrollments": {
+      ".read": "auth != null",
+      ".write": "auth != null && (auth.token.email === 'admin@gmail.com')"
+    },
+    "submissions": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    }
+  }
+}

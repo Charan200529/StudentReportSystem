@@ -4,7 +4,7 @@ import { User, UserRole } from '@/types';
  * Check if a user has a specific role
  */
 export function hasRole(user: User | null, role: UserRole): boolean {
-  if (!user) return false;
+  if (!user || !Array.isArray(user.roles)) return false;
   return user.roles.includes(role);
 }
 
@@ -12,16 +12,16 @@ export function hasRole(user: User | null, role: UserRole): boolean {
  * Check if a user has any of the specified roles
  */
 export function hasAnyRole(user: User | null, roles: UserRole[]): boolean {
-  if (!user) return false;
-  return roles.some(role => user.roles.includes(role));
+  if (!user || !Array.isArray(user.roles)) return false;
+  return roles.some(role => user.roles!.includes(role));
 }
 
 /**
  * Check if a user has all of the specified roles
  */
 export function hasAllRoles(user: User | null, roles: UserRole[]): boolean {
-  if (!user) return false;
-  return roles.every(role => user.roles.includes(role));
+  if (!user || !Array.isArray(user.roles)) return false;
+  return roles.every(role => user.roles!.includes(role));
 }
 
 /**
@@ -105,7 +105,7 @@ export function canViewAuditLogs(user: User | null): boolean {
  * Get the highest priority role for a user
  */
 export function getHighestRole(user: User | null): UserRole | null {
-  if (!user) return null;
+  if (!user || !Array.isArray(user.roles) || user.roles.length === 0) return null;
   
   const rolePriority: Record<UserRole, number> = {
     'ADMIN': 4,

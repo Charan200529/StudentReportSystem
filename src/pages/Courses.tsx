@@ -2,8 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { BookOpen, Users, Calendar, Plus } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { canManageCourses, isStudent } from '@/utils/rbac';
-import { db } from '@/firebase/config';
-import { ref, get, push, set, remove } from '@firebase/database';
+import api from '@/services/api';
 
 export const Courses: React.FC = () => {
   const { user } = useAuth();
@@ -25,20 +24,19 @@ export const Courses: React.FC = () => {
   useEffect(() => {
     const fetchCourses = async () => {
       try {
-        const coursesRef = ref(db, 'courses');
-        const snapshot = await get(coursesRef);
-        if (snapshot.exists()) {
-          const data = snapshot.val();
-          const list = Object.keys(data).map((id) => ({ 
-            id, 
-            ...data[id],
-            // Backward compatibility if some records still use `term`
-            semester: data[id].semester ?? data[id].term ?? null
-          }));
-          setCourses(list);
-        } else {
-          setCourses([]);
-        }
+        const data = await api.getAllCourses();
+        // Backend returns Course entities; normalize to UI shape
+        const list = (data || []).map((c: any) => ({
+          id: c.id,
+          title: c.title,
+          code: c.code,
+          description: c.description,
+          semester: c.semester,
+          teacher: c.teacher?.displayName || c.teacherId || 'Unknown',
+          status: 'active',
+          students: 0,
+        }));
+        setCourses(list);
       } catch {
         setCourses([]);
       } finally {
@@ -53,21 +51,26 @@ export const Courses: React.FC = () => {
     if (!canManageCourses(user)) return;
     setSaving(true);
     try {
-      const coursesRef = ref(db, 'courses');
-      const newRef = push(coursesRef);
-      const newCourse = {
+      const payload = {
         title: form.title.trim(),
         code: form.code.trim(),
         description: form.description.trim(),
-        teacher: form.teacher.trim() || (user?.displayName || 'Unknown'),
-        semester: typeof form.semester === 'number' ? form.semester : (user?.currentSemester ?? 1),
-        status: form.status,
-        students: 0,
-        createdAt: new Date().toISOString(),
-        createdBy: user?.uid || null,
+        semester: typeof form.semester === 'number' ? form.semester : 1,
+        // Use current user's backend id as teacherId
+        teacherId: Number(user?.uid),
       };
-      await set(newRef, newCourse);
-      setCourses([{ id: newRef.key as string, ...newCourse }, ...courses]);
+      const created = await api.createCourse(payload);
+      const createdUI = {
+        id: created.id,
+        title: created.title,
+        code: created.code,
+        description: created.description,
+        semester: created.semester,
+        teacher: created.teacher?.displayName || created.teacherId,
+        status: 'active',
+        students: 0,
+      };
+      setCourses([createdUI, ...courses]);
       setShowForm(false);
       setForm({ title: '', code: '', description: '', teacher: '', semester: '', status: 'active' });
     } finally {
@@ -93,21 +96,25 @@ export const Courses: React.FC = () => {
     if (!editingCourse || !canManageCourses(user)) return;
     setSaving(true);
     try {
-      const courseRef = ref(db, `courses/${editingCourse.id}`);
-      const updatedCourse = {
-        ...editingCourse,
+      const payload = {
         title: form.title.trim(),
         code: form.code.trim(),
         description: form.description.trim(),
-        teacher: form.teacher.trim(),
         semester: typeof form.semester === 'number' ? form.semester : 1,
-        status: form.status,
-        updatedAt: new Date().toISOString(),
+        teacherId: Number(user?.uid),
       };
-      await set(courseRef, updatedCourse);
-      
-      // Update local state
-      setCourses(courses.map(c => c.id === editingCourse.id ? { ...c, ...updatedCourse } : c));
+      const updated = await api.updateCourse(Number(editingCourse.id), payload);
+      const updatedUI = {
+        id: updated.id,
+        title: updated.title,
+        code: updated.code,
+        description: updated.description,
+        semester: updated.semester,
+        teacher: updated.teacher?.displayName || updated.teacherId,
+        status: 'active',
+        students: 0,
+      };
+      setCourses(courses.map(c => c.id === editingCourse.id ? { ...c, ...updatedUI } : c));
       setShowEditForm(false);
       setEditingCourse(null);
       setForm({ title: '', code: '', description: '', teacher: '', semester: '', status: 'active' });
@@ -116,12 +123,11 @@ export const Courses: React.FC = () => {
     }
   };
 
-  const handleDeleteCourse = async (courseId: string) => {
+  const handleDeleteCourse = async (courseId: string | number) => {
     if (!canManageCourses(user)) return;
     if (window.confirm('Are you sure you want to delete this course? This action cannot be undone.')) {
       try {
-        const courseRef = ref(db, `courses/${courseId}`);
-        await remove(courseRef);
+        await api.deleteCourse(Number(courseId));
         setCourses(courses.filter(c => c.id !== courseId));
       } catch (error) {
         console.error('Error deleting course:', error);

@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+  # Spring Boot Backend
+  backend:
+    build: ./backend
+    container_name: sms-backend
+    environment:
+      JWT_SECRET: mySecretKey123456789012345678901234567890
+    ports:
+      - "8081:8080"
+    networks:
+      - sms-network
+
+  # React Frontend
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: sms-frontend
+    ports:
+      - "3001:5173"
+    depends_on:
+      - backend
+    networks:
+      - sms-network
+    volumes:
+      - ./:/app
+      - /app/node_modules
+
+networks:
+  sms-network:
+    driver: bridge

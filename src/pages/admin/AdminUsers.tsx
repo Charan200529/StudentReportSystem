@@ -1,8 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
-import { ref, get, set } from '@firebase/database';
-import { db } from '@/firebase/config';
-import { User, UserRole } from '@/types';
+import { UserRole } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { hasRole } from '@/utils/rbac';
 import { 
@@ -16,15 +14,21 @@ import {
   AlertCircle
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import api from '@/services/api';
 
-interface UserWithId extends User {
-  id: string;
-}
+type AdminUserRow = {
+  id: number;
+  email: string;
+  displayName: string;
+  role: UserRole;
+  currentSemester?: number | null;
+  createdAt?: string | Date;
+};
 
 export const AdminUsers: React.FC = () => {
   const { user: currentUser } = useAuth();
-  const [editingUser, setEditingUser] = useState<string | null>(null);
-  const [editingRoles, setEditingRoles] = useState<UserRole[]>([]);
+  const [editingUser, setEditingUser] = useState<number | null>(null);
+  const [editingRole, setEditingRole] = useState<UserRole | ''>('');
   const [editingSemester, setEditingSemester] = useState<number | ''>('');
   const [roleFilter, setRoleFilter] = useState<'ALL' | UserRole>('ALL');
   const [semesterFilter, setSemesterFilter] = useState<number | ''>('');
@@ -44,40 +48,36 @@ export const AdminUsers: React.FC = () => {
   }
 
   // Fetch all users
-  const { data: users, isLoading, error } = useQuery<UserWithId[]>(
+  const { data: users, isLoading, error } = useQuery<AdminUserRow[]>(
     'users',
     async () => {
-      const usersRef = ref(db, 'users');
-      const snapshot = await get(usersRef);
-      if (snapshot.exists()) {
-        const usersData = snapshot.val();
-        return Object.keys(usersData).map(uid => ({
-          id: uid,
-          ...usersData[uid]
-        })) as UserWithId[];
-      }
-      return [];
+      const data = await api.getAllUsers();
+      return (data || []).map((u: any) => ({
+        id: u.id,
+        email: u.email,
+        displayName: u.displayName,
+        role: u.role,
+        currentSemester: u.currentSemester,
+        createdAt: u.createdAt ?? new Date().toISOString(),
+      }));
     }
   );
 
   const filteredUsers = (users || []).filter(u => {
-    const roleOk = roleFilter === 'ALL' ? true : u.roles?.includes(roleFilter);
+    const roleOk = roleFilter === 'ALL' ? true : u.role === roleFilter;
     const semOk = semesterFilter === '' ? true : (u.currentSemester ?? null) === semesterFilter;
     return roleOk && semOk;
   });
 
   // Update user roles mutation
-  const updateUserRoles = useMutation(
-    async ({ userId, roles, currentSemester }: { userId: string; roles: UserRole[]; currentSemester?: number }) => {
-      const userRef = ref(db, `users/${userId}`);
-      const snap = await get(userRef);
-      const existing = snap.exists() ? snap.val() : {};
-      await set(userRef, {
-        ...existing,
-        roles,
-        ...(currentSemester ? { currentSemester } : {}),
-        updatedAt: new Date().toISOString()
-      });
+  const updateUserDetails = useMutation(
+    async ({ userId, role, currentSemester }: { userId: number; role: UserRole; currentSemester?: number }) => {
+      // Update role
+      await api.updateUserRole(userId, role);
+      // Optionally update semester
+      if (typeof currentSemester === 'number') {
+        await api.updateUserSemester(userId, currentSemester);
+      }
     },
     {
       onSuccess: () => {
@@ -91,24 +91,23 @@ export const AdminUsers: React.FC = () => {
     }
   );
 
-  const handleEditRoles = (user: UserWithId) => {
+  const handleEditRoles = (user: AdminUserRow) => {
     setEditingUser(user.id);
-    setEditingRoles([...user.roles]);
+    setEditingRole(user.role);
     setEditingSemester(user.currentSemester ?? '');
   };
 
-  const handleSaveRoles = async (userId: string) => {
-    if (editingRoles.length === 0) {
-      toast.error('User must have at least one role');
+  const handleSaveRoles = async (userId: number) => {
+    if (!editingRole) {
+      toast.error('Select a role');
       return;
     }
-    
-    await updateUserRoles.mutateAsync({ userId, roles: editingRoles, currentSemester: typeof editingSemester === 'number' ? editingSemester : undefined });
+    await updateUserDetails.mutateAsync({ userId, role: editingRole, currentSemester: typeof editingSemester === 'number' ? editingSemester : undefined });
   };
 
   const handleCancelEdit = () => {
     setEditingUser(null);
-    setEditingRoles([]);
+    setEditingRole('');
   };
 
   const getRoleIcon = (role: UserRole) => {
@@ -270,36 +269,20 @@ export const AdminUsers: React.FC = () => {
                     
                     <td className="px-6 py-4 whitespace-nowrap">
                       {editingUser === user.id ? (
-                        <div className="space-y-2">
-                          <div className="flex flex-wrap gap-2">
-                            {(['STUDENT', 'TEACHER', 'ADMIN', 'PARENT'] as UserRole[]).map((role) => (
-                              <label key={role} className="flex items-center">
-                                <input
-                                  type="checkbox"
-                                  checked={editingRoles.includes(role)}
-                                  onChange={(e) => {
-                                    if (e.target.checked) {
-                                      setEditingRoles([...editingRoles, role]);
-                                    } else {
-                                      setEditingRoles(editingRoles.filter(r => r !== role));
-                                    }
-                                  }}
-                                  className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
-                                />
-                                <span className="ml-2 text-sm text-gray-700">{role}</span>
-                              </label>
-                            ))}
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="flex flex-wrap gap-1">
-                          {user.roles.map((role) => (
-                            <span key={role} className={getRoleBadge(role)}>
-                              {getRoleIcon(role)}
-                              <span className="ml-1">{role}</span>
-                            </span>
+                        <select
+                          value={editingRole}
+                          onChange={(e) => setEditingRole(e.target.value as UserRole)}
+                          className="mt-1 block w-40 rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
+                        >
+                          {(['STUDENT', 'TEACHER', 'ADMIN'] as UserRole[]).map((role) => (
+                            <option key={role} value={role}>{role}</option>
                           ))}
-                        </div>
+                        </select>
+                      ) : (
+                        <span className={getRoleBadge(user.role)}>
+                          {getRoleIcon(user.role)}
+                          <span className="ml-1">{user.role}</span>
+                        </span>
                       )}
                     </td>
                     
@@ -320,10 +303,7 @@ export const AdminUsers: React.FC = () => {
                     </td>
 
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {user.createdAt instanceof Date 
-                        ? user.createdAt.toLocaleDateString()
-                        : new Date(user.createdAt).toLocaleDateString()
-                      }
+                      {new Date(user.createdAt || new Date()).toLocaleDateString()}
                     </td>
                     
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
@@ -331,7 +311,7 @@ export const AdminUsers: React.FC = () => {
                         <div className="flex space-x-2">
                           <button
                             onClick={() => handleSaveRoles(user.id)}
-                            disabled={updateUserRoles.isLoading}
+                            disabled={updateUserDetails.isLoading}
                             className="inline-flex items-center px-3 py-1 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50"
                           >
                             <Save className="h-4 w-4 mr-1" />

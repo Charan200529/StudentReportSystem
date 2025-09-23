@@ -6,33 +6,31 @@ import {
   FileText, 
   Users, 
   TrendingUp, 
-  Calendar,
   Bell,
   Award
 } from 'lucide-react';
-import { db } from '@/firebase/config';
-import { ref, get } from '@firebase/database';
+import { apiService } from '@/services/api';
 
 export const Dashboard: React.FC = () => {
   const { user } = useAuth();
   const [counts, setCounts] = useState({ users: 0, courses: 0, assignments: 0 });
-  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchCounts = async () => {
       try {
-        const [usersSnap, coursesSnap, assignmentsSnap] = await Promise.all([
-          get(ref(db, 'users')),
-          get(ref(db, 'courses')),
-          get(ref(db, 'assignments'))
+        const [usersData, coursesData, assignmentsData] = await Promise.all([
+          apiService.getAllUsers(),
+          apiService.getAllCourses(),
+          apiService.getAllAssignments()
         ]);
         setCounts({
-          users: usersSnap.exists() ? Object.keys(usersSnap.val()).length : 0,
-          courses: coursesSnap.exists() ? Object.keys(coursesSnap.val()).length : 0,
-          assignments: assignmentsSnap.exists() ? Object.keys(assignmentsSnap.val()).length : 0,
+          users: usersData?.length || 0,
+          courses: coursesData?.length || 0,
+          assignments: assignmentsData?.length || 0,
         });
-      } finally {
-        setLoading(false);
+      } catch (error) {
+        console.error('Error fetching counts:', error);
+        setCounts({ users: 0, courses: 0, assignments: 0 });
       }
     };
     fetchCounts();

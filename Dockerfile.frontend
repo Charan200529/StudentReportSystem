@@ -7,8 +7,8 @@ RUN npm ci || npm install
 
 COPY . .
 
-# Match frontend code which reads VITE_API_BASE_URL
-ENV VITE_API_BASE_URL=http://localhost:8081/api
+# Match frontend code which reads VITE_API_URL
+ENV VITE_API_URL=http://localhost:8081/api
 
 EXPOSE 5173
 

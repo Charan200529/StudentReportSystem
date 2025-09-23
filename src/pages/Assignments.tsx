@@ -1,9 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { FileText, Calendar, Clock, Plus, CheckCircle, AlertCircle } from 'lucide-react';
+import { FileText, Clock, Plus, CheckCircle, AlertCircle } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { canCreateAssignments, isStudent, canGradeSubmissions, isAdmin, isTeacher } from '@/utils/rbac';
-import { db } from '@/firebase/config';
-import { ref, get, push, set, update } from '@firebase/database';
+import { apiService } from '@/services/api';
 
 export const Assignments: React.FC = () => {
   const { user } = useAuth();
@@ -27,7 +26,6 @@ export const Assignments: React.FC = () => {
   const [submissionText, setSubmissionText] = useState<string>('');
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [gradingSuccess, setGradingSuccess] = useState<string | null>(null);
-  const [enrollments, setEnrollments] = useState<any[]>([]);
   const [courses, setCourses] = useState<any[]>([]);
 
   useEffect(() => {
@@ -35,90 +33,30 @@ export const Assignments: React.FC = () => {
       try {
         console.log('Fetching assignments and submissions...');
         
-        // Fetch assignments
-        const assignmentsRef = ref(db, 'assignments');
-        const assignmentsSnapshot = await get(assignmentsRef);
-        console.log('Assignments snapshot:', assignmentsSnapshot.exists(), assignmentsSnapshot.val());
-        
-                 if (assignmentsSnapshot.exists()) {
-           const data = assignmentsSnapshot.val();
-           const list = Object.keys(data).map((id) => ({ id, ...data[id] }));
-           console.log('Processed assignments:', list);
-           console.log('Assignments with courseId check:');
-           list.forEach(assignment => {
-             console.log(`- ${assignment.title}: courseId = ${assignment.courseId || 'MISSING'}`);
-           });
-           setAssignments(list);
-         } else {
-           console.log('No assignments found');
-           setAssignments([]);
-         }
+        // Fetch assignments from Spring Boot API
+        const assignmentsData = await apiService.getAllAssignments();
+        console.log('Assignments from API:', assignmentsData);
+        setAssignments(assignmentsData || []);
       } catch (error) {
         console.error('Error fetching assignments:', error);
         setAssignments([]);
       }
 
       try {
-        // Fetch submissions separately to avoid affecting assignments
-        const submissionsRef = ref(db, 'submissions');
-        const submissionsSnapshot = await get(submissionsRef);
-        console.log('Submissions snapshot:', submissionsSnapshot.exists(), submissionsSnapshot.val());
-        
-        if (submissionsSnapshot.exists()) {
-          const data = submissionsSnapshot.val();
-          const list = Object.keys(data).map((id) => ({ id, ...data[id] }));
-          console.log('Processed submissions:', list);
-          setSubmissions(list);
-        } else {
-          console.log('No submissions found');
-          setSubmissions([]);
-        }
+        // Fetch submissions from Spring Boot API
+        const submissionsData = await apiService.getMySubmissions();
+        console.log('Submissions from API:', submissionsData);
+        setSubmissions(submissionsData || []);
       } catch (error) {
         console.error('Error fetching submissions:', error);
         setSubmissions([]);
-        // Don't fail the entire operation if submissions can't be fetched
       }
 
-               try {
-           // Fetch enrollments for the current user
-           if (user) {
-             console.log('Fetching enrollments for user:', user.uid);
-             const enrollmentsRef = ref(db, `enrollments/${user.uid}`);
-             const enrollmentsSnapshot = await get(enrollmentsRef);
-             console.log('Enrollments snapshot exists:', enrollmentsSnapshot.exists());
-             console.log('Enrollments raw data:', enrollmentsSnapshot.val());
-             
-             if (enrollmentsSnapshot.exists()) {
-               const data = enrollmentsSnapshot.val();
-               console.log('Raw enrollments data:', data);
-               const list = Object.keys(data).map((courseId) => ({ courseId, ...data[courseId] }));
-               console.log('Processed enrollments list:', list);
-               setEnrollments(list);
-             } else {
-               console.log('No enrollments found for user:', user.uid);
-               setEnrollments([]);
-             }
-           }
-         } catch (error) {
-           console.error('Error fetching enrollments:', error);
-           setEnrollments([]);
-         }
-
       try {
-        // Fetch courses
-        const coursesRef = ref(db, 'courses');
-        const coursesSnapshot = await get(coursesRef);
-        console.log('Courses snapshot:', coursesSnapshot.exists(), coursesSnapshot.val());
-        
-        if (coursesSnapshot.exists()) {
-          const data = coursesSnapshot.val();
-          const list = Object.keys(data).map((id) => ({ id, ...data[id] }));
-          console.log('Processed courses:', list);
-          setCourses(list);
-        } else {
-          console.log('No courses found');
-          setCourses([]);
-        }
+        // Fetch courses from Spring Boot API
+        const coursesData = await apiService.getAllCourses();
+        console.log('Courses from API:', coursesData);
+        setCourses(coursesData || []);
       } catch (error) {
         console.error('Error fetching courses:', error);
         setCourses([]);
@@ -146,29 +84,23 @@ export const Assignments: React.FC = () => {
     
     setSaving(true);
     try {
-      const assignmentsRef = ref(db, 'assignments');
-      const newRef = push(assignmentsRef);
       const newAssignment = {
         title: form.title.trim(),
         description: form.description.trim(),
-        courseId: form.courseId,
-        semester: form.semester,
+        courseId: parseInt(form.courseId),
+        semester: parseInt(form.semester),
         maxPoints: parseInt(form.maxPoints) || 100,
         dueDate: form.dueDate,
         instructions: form.instructions.trim(),
         attachments: form.attachments,
-        status: 'active',
-        createdAt: new Date().toISOString(),
-        createdBy: user?.uid || null,
+        status: 'ACTIVE',
       };
       
       console.log('Creating new assignment:', newAssignment);
-      await set(newRef, newAssignment);
+      const createdAssignment = await apiService.createAssignment(newAssignment);
+      console.log('Assignment created successfully:', createdAssignment);
       
-      const assignmentWithId = { id: newRef.key as string, ...newAssignment };
-      console.log('Assignment created successfully:', assignmentWithId);
-      
-      setAssignments([assignmentWithId, ...assignments]);
+      setAssignments([createdAssignment, ...assignments]);
       setShowForm(false);
       setForm({ title: '', description: '', courseId: '', semester: '', maxPoints: '', dueDate: '', instructions: '', attachments: [] });
     } catch (error) {
@@ -196,37 +128,23 @@ export const Assignments: React.FC = () => {
     
     setSubmitting(true);
     try {
-      const submissionsRef = ref(db, 'submissions');
-      const newRef = push(submissionsRef);
       const submission = {
         assignmentId: selectedAssignment.id,
-        studentId: user.uid,
-        studentName: user.displayName,
         submissionText: submissionText.trim(),
-        submittedAt: new Date().toISOString(),
-        status: 'submitted',
-        score: null,
-        feedback: null,
-        gradedBy: null,
-        gradedAt: null,
+        status: 'SUBMITTED',
       };
-      await set(newRef, submission);
       
-      // Update local state instead of updating assignment in database
-      const newSubmissionWithId = { id: newRef.key as string, ...submission };
-      setSubmissions([newSubmissionWithId, ...submissions]);
+      const createdSubmission = await apiService.createSubmission(submission);
+      setSubmissions([createdSubmission, ...submissions]);
       
-      console.log('New submission created:', newSubmissionWithId);
-      console.log('Updated submissions array:', [newSubmissionWithId, ...submissions]);
-      
-      // Note: Submission count is now calculated dynamically from submissions data
+      console.log('New submission created:', createdSubmission);
       
       setShowDetails(false);
       setSelectedAssignment(null);
       setSubmissionText('');
     } catch (error) {
       console.error('Error submitting assignment:', error);
-      // You could add a toast notification here to show the error to the user
+      alert('Failed to submit assignment. Please try again.');
     } finally {
       setSubmitting(false);
     }
@@ -235,37 +153,12 @@ export const Assignments: React.FC = () => {
   const handleGradeSubmission = async (submissionId: string, score: number, feedback: string) => {
     if (!user) return;
     try {
-      const submissionRef = ref(db, `submissions/${submissionId}`);
+      await apiService.gradeSubmission(parseInt(submissionId), score, feedback);
       
-      // Get the current submission to preserve existing data
-      const currentSubmission = submissions.find(s => s.id === submissionId);
-      if (!currentSubmission) {
-        console.error('Submission not found for grading');
-        return;
-      }
-      
-      const updatedSubmission = {
-        ...currentSubmission, // Preserve all existing data
-        score,
-        feedback,
-        gradedBy: user.uid,
-        gradedAt: new Date().toISOString(),
-        status: 'graded'
-      };
-      
-      // Update database first - only update the grading fields
-      await update(submissionRef, {
-        score,
-        feedback,
-        gradedBy: user.uid,
-        gradedAt: new Date().toISOString(),
-        status: 'graded'
-      });
-      
-      // Update local state with the complete updated submission
+      // Update local state
       setSubmissions(submissions.map(s => 
         s.id === submissionId 
-          ? updatedSubmission
+          ? { ...s, score, feedback, status: 'GRADED' }
           : s
       ));
       
@@ -408,17 +301,6 @@ export const Assignments: React.FC = () => {
     return [];
   };
 
-  // Get course name by courseId
-  const getCourseName = (courseId: string) => {
-    const course = courses.find(c => c.id === courseId);
-    return course ? course.title : 'Unknown Course';
-  };
-
-  // Get course code by courseId
-  const getCourseCode = (courseId: string) => {
-    const course = courses.find(c => c.id === courseId);
-    return course ? course.code : 'N/A';
-  };
 
   return (
     <div>

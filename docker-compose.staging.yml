@@ -1,0 +1,60 @@
+version: '3.8'
+
+services:
+  # Spring Boot Backend
+  backend:
+    image: ${DOCKER_REGISTRY:-localhost:5000}/student-management-system-backend:${DOCKER_TAG:-staging}
+    container_name: sms-backend-staging
+    environment:
+      SPRING_PROFILES_ACTIVE: staging
+      SPRING_DATASOURCE_URL: ${NEON_DB_URL:-jdbc:postgresql://ep-crimson-cake-adbzlxtt-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require&channelBinding=require}
+      SPRING_DATASOURCE_USERNAME: ${NEON_DB_USERNAME:-neondb_owner}
+      SPRING_DATASOURCE_PASSWORD: ${NEON_DB_PASSWORD:-npg_mUrP6RuW0YtE}
+      JWT_SECRET: ${JWT_SECRET:-mySecretKey123456789012345678901234567890}
+      SERVER_PORT: 8080
+    ports:
+      - "8082:8080"
+    networks:
+      - sms-staging-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # React Frontend
+  frontend:
+    image: ${DOCKER_REGISTRY:-localhost:5000}/student-management-system-frontend:${DOCKER_TAG:-staging}
+    container_name: sms-frontend-staging
+    environment:
+      VITE_API_BASE_URL: http://localhost:8082/api
+      NODE_ENV: staging
+    ports:
+      - "3002:5173"
+    depends_on:
+      - backend
+    networks:
+      - sms-staging-network
+    restart: unless-stopped
+
+  # Nginx Reverse Proxy
+  nginx:
+    image: nginx:alpine
+    container_name: sms-nginx-staging
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/staging.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - frontend
+      - backend
+    networks:
+      - sms-staging-network
+    restart: unless-stopped
+
+networks:
+  sms-staging-network:
+    driver: bridge

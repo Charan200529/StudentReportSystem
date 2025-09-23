@@ -1,0 +1,29 @@
+# Jenkins Plugins Configuration
+# This file contains the list of recommended plugins for the Student Management System
+
+plugins:
+  - blueocean
+  - docker-workflow
+  - docker-plugin
+  - git
+  - github
+  - pipeline-stage-view
+  - build-timeout
+  - credentials-binding
+  - timestamper
+  - ws-cleanup
+  - ant
+  - gradle
+  - workflow-aggregator
+  - github-branch-source
+  - pipeline-github-lib
+  - slack
+  - email-ext
+  - htmlpublisher
+  - test-results-analyzer
+  - warnings-ng
+  - sonar
+  - trivy-scanner
+  - kubernetes
+  - kubernetes-cli
+  - kubernetes-client-api

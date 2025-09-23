@@ -15,4 +15,4 @@ FROM openjdk:17-jdk-slim
 WORKDIR /app
 COPY --from=build /build/target/*-SNAPSHOT.jar app.jar
 EXPOSE 8080
-ENTRYPOINT ["java", "-jar", "app.jar"]
+ENTRYPOINT ["java", "-jar", "app.jar", "--spring.profiles.active=docker"]

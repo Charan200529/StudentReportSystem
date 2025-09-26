@@ -22,9 +22,9 @@ public interface AssignmentRepository extends JpaRepository<Assignment, Long> {
            "(SELECT e.courseId FROM Enrollment e WHERE e.studentId = :studentId AND e.status = 'ACTIVE')")
     List<Assignment> findAssignmentsForStudent(@Param("studentId") Long studentId);
     
-    @Query("SELECT a FROM Assignment a WHERE a.courseId IN " +
+    @Query("SELECT a FROM Assignment a JOIN FETCH a.course c WHERE a.courseId IN " +
            "(SELECT e.courseId FROM Enrollment e WHERE e.studentId = :studentId AND e.status = 'ACTIVE') " +
-           "AND a.course.semester = :semester")
+           "AND c.semester = :semester")
     List<Assignment> findAssignmentsForStudentBySemester(@Param("studentId") Long studentId, @Param("semester") Integer semester);
     
     @Query("SELECT COUNT(a) FROM Assignment a")

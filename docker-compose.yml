@@ -11,7 +11,7 @@ services:
       MYSQL_USER: student_user
       MYSQL_PASSWORD: student_password
     ports:
-      - "3307:3306"
+      - "3309:3306"
     volumes:
       - mysql_data:/var/lib/mysql
     networks:

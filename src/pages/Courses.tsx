@@ -36,7 +36,16 @@ export const Courses: React.FC = () => {
           status: 'active',
           students: 0,
         }));
-        setCourses(list);
+        
+        // Filter courses based on user role and semester
+        let filteredCourses = list;
+        
+        if (isStudent(user) && user?.currentSemester) {
+          // Students see only courses for their semester
+          filteredCourses = list.filter(course => course.semester === user.currentSemester);
+        }
+        
+        setCourses(filteredCourses);
       } catch {
         setCourses([]);
       } finally {
@@ -44,7 +53,7 @@ export const Courses: React.FC = () => {
       }
     };
     fetchCourses();
-  }, []);
+  }, [user]);
 
   const handleCreateCourse = async (e: React.FormEvent) => {
     e.preventDefault();

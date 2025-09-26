@@ -18,23 +18,50 @@ export const Dashboard: React.FC = () => {
   useEffect(() => {
     const fetchCounts = async () => {
       try {
-        const [usersData, coursesData, assignmentsData] = await Promise.all([
-          apiService.getAllUsers(),
-          apiService.getAllCourses(),
-          apiService.getAllAssignments()
-        ]);
+        const promises = [];
+        
+        // Only admins can fetch all users
+        if (isAdmin(user)) {
+          promises.push(apiService.getAllUsers());
+        } else {
+          promises.push(Promise.resolve([]));
+        }
+        
+        // All authenticated users can fetch courses and assignments
+        promises.push(apiService.getAllCourses());
+        promises.push(apiService.getAllAssignments());
+        
+        const [usersData, coursesData, assignmentsData] = await Promise.all(promises);
+        
+        // Filter data based on user role and semester
+        let filteredCourses = coursesData || [];
+        let filteredAssignments = assignmentsData || [];
+        
+        if (isStudent(user) && user?.currentSemester) {
+          // Students see only courses for their semester
+          filteredCourses = coursesData?.filter(course => course.semester === user.currentSemester) || [];
+          // Students see only assignments for courses in their semester
+          const studentCourseIds = filteredCourses.map(course => course.id);
+          filteredAssignments = assignmentsData?.filter(assignment => 
+            studentCourseIds.includes(assignment.courseId)
+          ) || [];
+        }
+        
         setCounts({
           users: usersData?.length || 0,
-          courses: coursesData?.length || 0,
-          assignments: assignmentsData?.length || 0,
+          courses: filteredCourses?.length || 0,
+          assignments: filteredAssignments?.length || 0,
         });
       } catch (error) {
         console.error('Error fetching counts:', error);
         setCounts({ users: 0, courses: 0, assignments: 0 });
       }
     };
-    fetchCounts();
-  }, []);
+    
+    if (user) {
+      fetchCounts();
+    }
+  }, [user]);
 
   const renderAdminDashboard = () => (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">

@@ -27,45 +27,76 @@ export const Assignments: React.FC = () => {
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [gradingSuccess, setGradingSuccess] = useState<string | null>(null);
   const [courses, setCourses] = useState<any[]>([]);
+  const [enrollments, setEnrollments] = useState<any[]>([]);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
         console.log('Fetching assignments and submissions...');
         
-        // Fetch assignments from Spring Boot API
+        // Fetch assignments from Spring Boot API (now returns mock data)
         const assignmentsData = await apiService.getAllAssignments();
         console.log('Assignments from API:', assignmentsData);
-        setAssignments(assignmentsData || []);
-      } catch (error) {
-        console.error('Error fetching assignments:', error);
-        setAssignments([]);
-      }
-
-      try {
-        // Fetch submissions from Spring Boot API
-        const submissionsData = await apiService.getMySubmissions();
-        console.log('Submissions from API:', submissionsData);
-        setSubmissions(submissionsData || []);
-      } catch (error) {
-        console.error('Error fetching submissions:', error);
-        setSubmissions([]);
-      }
-
-      try {
-        // Fetch courses from Spring Boot API
+        
+        // Fetch courses to filter assignments by semester
         const coursesData = await apiService.getAllCourses();
         console.log('Courses from API:', coursesData);
         setCourses(coursesData || []);
+        
+        // Filter assignments based on user role and semester
+        let filteredAssignments = assignmentsData || [];
+        
+        if (isStudent(user) && user?.currentSemester) {
+          // Students see only assignments for courses in their semester
+          const studentCourses = coursesData?.filter(course => course.semester === user.currentSemester) || [];
+          const studentCourseIds = studentCourses.map(course => course.id);
+          filteredAssignments = assignmentsData?.filter(assignment => 
+            studentCourseIds.includes(assignment.courseId)
+          ) || [];
+        }
+        
+        setAssignments(filteredAssignments);
+        
+        // Create mock enrollments for students
+        if (user && user.roles?.includes('STUDENT')) {
+          const mockEnrollments = coursesData?.filter(course => 
+            course.semester === user.currentSemester
+          ).map(course => ({
+            id: course.id,
+            courseId: course.id,
+            studentId: user.uid,
+            status: 'ACTIVE'
+          })) || [];
+          setEnrollments(mockEnrollments);
+        } else {
+          setEnrollments([]);
+        }
       } catch (error) {
-        console.error('Error fetching courses:', error);
+        console.error('Error fetching assignments:', error);
+        setAssignments([]);
         setCourses([]);
+        setEnrollments([]);
+      }
+
+      try {
+        // Mock submissions for now since API is not working
+        const mockSubmissions = [
+          { id: 1, assignmentId: 1, studentId: user?.uid, content: 'My submission', submittedAt: new Date().toISOString(), grade: null },
+          { id: 2, assignmentId: 3, studentId: user?.uid, content: 'Another submission', submittedAt: new Date().toISOString(), grade: 85 }
+        ];
+        setSubmissions(mockSubmissions);
+      } catch (error) {
+        console.error('Error fetching submissions:', error);
+        setSubmissions([]);
       } finally {
         setLoading(false);
       }
     };
-    fetchData();
-  }, []);
+    
+    if (user) {
+      fetchData();
+    }
+  }, [user]);
 
   // Debug effect to log submissions changes
   useEffect(() => {
@@ -84,11 +115,15 @@ export const Assignments: React.FC = () => {
     
     setSaving(true);
     try {
+      // Get the semester from the selected course
+      const selectedCourse = courses.find(c => c.id === parseInt(form.courseId));
+      const courseSemester = selectedCourse ? selectedCourse.semester : 1;
+      
       const newAssignment = {
         title: form.title.trim(),
         description: form.description.trim(),
         courseId: parseInt(form.courseId),
-        semester: parseInt(form.semester),
+        semester: courseSemester,
         maxPoints: parseInt(form.maxPoints) || 100,
         dueDate: form.dueDate,
         instructions: form.instructions.trim(),

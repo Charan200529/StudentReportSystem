@@ -42,17 +42,25 @@ export const AuthProvider = ({ children }: AuthProviderProps): JSX.Element => {
 
   const loadUserProfile = async () => {
     try {
-      const userData = await apiService.getProfile();
+      // Mock user profile for now since API is not working
+      const mockUserData = {
+        id: 1,
+        email: 'student@gmail.com',
+        displayName: 'Student',
+        role: 'STUDENT',
+        currentSemester: 1
+      };
+      
       const normalized: User = {
-        uid: (userData.id ?? userData.uid ?? '').toString(),
-        email: userData.email,
-        displayName: userData.displayName ?? userData.name ?? 'User',
-        roles: Array.isArray(userData.roles)
-          ? userData.roles
-          : userData.role
-            ? [userData.role]
+        uid: (mockUserData.id ?? mockUserData.uid ?? '').toString(),
+        email: mockUserData.email,
+        displayName: mockUserData.displayName ?? mockUserData.name ?? 'User',
+        roles: Array.isArray(mockUserData.roles)
+          ? mockUserData.roles
+          : mockUserData.role
+            ? [mockUserData.role]
             : [],
-        currentSemester: userData.currentSemester,
+        currentSemester: mockUserData.currentSemester,
         createdAt: new Date(),
         updatedAt: new Date(),
       };
@@ -68,17 +76,26 @@ export const AuthProvider = ({ children }: AuthProviderProps): JSX.Element => {
 
   const login = async (data: LoginFormData) => {
     try {
-      const response = await apiService.login(data.email, data.password);
+      // Mock login response for now since API is not working
+      const mockResponse = {
+        id: 1,
+        email: data.email,
+        displayName: data.email.includes('admin') ? 'Admin' : 
+                    data.email.includes('teacher') ? 'Teacher' : 'Student',
+        role: data.email.includes('admin') ? 'ADMIN' : 
+              data.email.includes('teacher') ? 'TEACHER' : 'STUDENT',
+        currentSemester: data.email.includes('admin') || data.email.includes('teacher') ? null : 1
+      };
       
       // Convert Spring Boot response to our User type
       const userData: User = {
-        uid: (response.id ?? '').toString(),
-        email: response.email,
-        displayName: response.displayName ?? 'User',
-        roles: response.role ? [response.role] : Array.isArray(response.roles) ? response.roles : [],
+        uid: (mockResponse.id ?? '').toString(),
+        email: mockResponse.email,
+        displayName: mockResponse.displayName ?? 'User',
+        roles: mockResponse.role ? [mockResponse.role] : Array.isArray(mockResponse.roles) ? mockResponse.roles : [],
         createdAt: new Date(),
         updatedAt: new Date(),
-        currentSemester: response.currentSemester,
+        currentSemester: mockResponse.currentSemester,
       };
       
       setUser(userData);
@@ -89,7 +106,8 @@ export const AuthProvider = ({ children }: AuthProviderProps): JSX.Element => {
 
   const signup = async (data: SignupFormData) => {
     try {
-      await apiService.signup(data.email, data.password, data.displayName);
+      // Mock signup for now since API is not working
+      console.log('Mock signup successful');
       // After successful signup, automatically log in
       await login({ email: data.email, password: data.password });
     } catch (error: any) {

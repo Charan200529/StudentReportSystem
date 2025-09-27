@@ -33,7 +33,11 @@
     "eslint-plugin-react-hooks": "^4.6.0",
     "prettier": "^3.1.1",
     "typescript": "^5.3.3",
-    "vite": "^5.0.10"
+    "vite": "^5.0.10",
+    "vitest": "^0.36.1",
+    "@testing-library/react": "^14.0.0",
+    "@testing-library/jest-dom": "^6.0.0",
+    "jsdom": "^22.1.0"
   },
   "scripts": {
     "dev": "vite",
@@ -41,7 +45,8 @@
     "preview": "vite preview",
     "lint": "eslint src --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "lint:fix": "eslint src --ext ts,tsx --fix",
-    "format": "prettier --write src/**/*.{ts,tsx,js,jsx}"
+    "format": "prettier --write src/**/*.{ts,tsx,js,jsx}",
+    "test": "vitest run --coverage"
   },
   "browserslist": {
     "production": [
